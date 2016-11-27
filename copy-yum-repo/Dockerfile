@@ -3,7 +3,7 @@ FROM centos:centos6
 VOLUME /var/repo
 WORKDIR /var/repo
 
-RUN yum install -y \
+RUN yum -q -y install \
     createrepo \
     perl \
     yum-utils \
