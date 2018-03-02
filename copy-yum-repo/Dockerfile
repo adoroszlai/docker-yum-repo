@@ -1,13 +1,13 @@
-FROM centos:centos6
+FROM centos:7
 
-VOLUME /var/repo
 WORKDIR /var/repo
 
-RUN yum -q -y install \
+RUN yum -y install \
     createrepo \
     perl \
     yum-utils \
-  && yum clean all
+  && yum clean all \
+  && rm -rf /var/cache/yum
 
 COPY entrypoint.sh /
 RUN chmod +x /entrypoint.sh
