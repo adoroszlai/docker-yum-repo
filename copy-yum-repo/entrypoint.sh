@@ -7,7 +7,7 @@ function get-repo-file {
   local repo_url="$1"
   cd /etc/yum.repos.d
   rm -f *.repo
-  curl -s -O "${repo_url}"
+  curl --remote-name --silent "${repo_url}"
   echo $(pwd -P)/$(basename ${repo_url})
 }
 
@@ -19,13 +19,19 @@ function copy-packages {
 
   local urls=$(repotrack -n --urls "$@")
   for url in ${urls}; do
-    local dir=$(echo ${url} | cut -f3 -d'/')
-    local path=$(echo ${url} | cut -f4- -d'/')
-    mkdir -p ${dir}
-    cd ${dir}
+    local path=$(echo ${url} | cut -f3- -d'/')
+    if [[ -r ${path} ]]; then
+      local -i local_size=$(wc -c < ${path})
+      if [[ $local_size -gt 0 ]]; then
+        local -i remote_size=$(curl --silent --head ${url} | fgrep 'Content-Length' | cut -f2 -d' ' | tr -d '\r')
+        if [[ $local_size -eq $remote_size ]]; then
+          echo "Skipping ${url}"
+          continue
+        fi
+      fi
+    fi
     echo "Downloading ${url}"
-    curl --create-dirs -o ${path} -s ${url}
-    cd ..
+    curl --create-dirs --output ${path} --remote-time --silent ${url}
   done
 
   for dir in $(grep 'baseurl=' ${repo_file} | cut -f3- -d'/'); do
