@@ -3,6 +3,8 @@
 
 set -e -u
 
+: ${REPO_HOST:=}
+
 function get-repo-file {
   local repo_url="$1"
   cd /etc/yum.repos.d
@@ -17,8 +19,43 @@ function copy-packages {
 
   local repo_file=$(get-repo-file "${repo_url}")
 
-  local urls=$(repotrack -n --urls "$@")
-  for url in ${urls}; do
+  get-urls $(repotrack -n --urls "$@")
+  create-repos $(grep 'baseurl=' ${repo_file} | cut -f3- -d'/')
+  copy-gpg-keys "${repo_file}"
+  rm -f "${repo_file}"
+  [[ -z ${REPO_HOST} ]] || generate-local-repo-file ${REPO_HOST} ${repo_url}
+}
+
+function copy-repo {
+  for repo_url in "$@"; do
+    local repo_file=$(get-repo-file "${repo_url}")
+    for line in $(perl -wnl -00 -e '($name, $path) = $_ =~ /\[(\S+)\].*baseurl=https?:\/\/(\S+)/s and print "$name]$path"' "${repo_file}"); do
+      local repo="$(echo ${line} | cut -f1 -d']')"
+      local path="$(echo ${line} | cut -f2 -d']')"
+      reposync -n -p /var/repo/${path} --norepopath -r "${repo}"
+      create-repos ${path}
+    done
+    copy-gpg-keys "${repo_file}"
+    rm -f "${repo_file}"
+    [[ -z ${REPO_HOST} ]] || generate-local-repo-file ${REPO_HOST} ${repo_url}
+  done
+}
+
+function copy-gpg-keys {
+  local repo_file=$1
+  get-urls $(grep 'gpgkey=' ${repo_file} | cut -f2 -d'=')
+}
+
+function create-repos {
+  for dir in "$@"; do
+    [[ -d ${dir} ]] || continue
+    echo "Creating repo in ${dir}"
+    createrepo -q --update /var/repo/${dir}
+  done
+}
+
+function get-urls {
+  for url in "$@"; do
     local path=$(echo ${url} | cut -f3- -d'/')
     if [[ -r ${path} ]]; then
       local -i local_size=$(wc -c < ${path})
@@ -33,33 +70,22 @@ function copy-packages {
     echo "Downloading ${url}"
     curl --create-dirs --output ${path} --remote-time --silent ${url}
   done
-
-  for dir in $(grep 'baseurl=' ${repo_file} | cut -f3- -d'/'); do
-    [[ -d ${dir} ]] || continue
-    echo "Creating repo in ${dir}"
-    createrepo -q --update /var/repo/${dir}
-  done
-
-  rm -f "${repo_file}"
 }
 
-function copy-repo {
-  for repo_url in "$@"; do
-    local repo_file=$(get-repo-file "${repo_url}")
-    for line in $(perl -wnl -00 -e '($name, $path) = $_ =~ /\[(\S+)\].*baseurl=https?:\/\/(\S+)/s and print "$name]$path"' "${repo_file}"); do
-      local repo="$(echo ${line} | cut -f1 -d']')"
-      local path="$(echo ${line} | cut -f2 -d']')"
-      reposync -n -p /var/repo/${path} --norepopath -r "${repo}"
-      echo "Creating repo in ${path}"
-      createrepo -q --update /var/repo/${path}
-    done
-    rm -f "${repo_file}"
-  done
+function generate-local-repo-file {
+  local host=$1
+  [[ -n ${host} ]] || return 1
+  local url=$2
+  [[ -n ${url} ]] || return 2
+  local path=$(echo ${url} | cut -f3- -d'/')
+  mkdir -p $(dirname ${path})
+  curl --create-dirs --remote-time --silent ${url} | perl -wpl -e "s@https?://@\$&${host}/@g" > ${path}
 }
 
 function usage {
   echo "Usage:"
   echo "  repo <repo_url> [<repo_url> ...]"
+  echo "  repo-file <repo_host> <repo_url>"
   echo "  pkg <repo_url> <pkg_name> [<pkg_name> ...]"
 }
 
@@ -77,6 +103,14 @@ case ${cmd} in
   http*)
     # backwards compatibility
     copy-repo "$@"
+    ;;
+  repo-file)
+    shift
+    if [[ $# -lt 2 ]]; then
+      usage
+      exit 1
+    fi
+    generate-local-repo-file "$@"
     ;;
   *)
     usage
