@@ -11,4 +11,6 @@ RUN apt-get -q -y update \
 COPY entrypoint.sh /
 RUN chmod +x /entrypoint.sh
 
+WORKDIR /var/spool/apt-mirror/mirror
+
 ENTRYPOINT [ "/entrypoint.sh" ]
