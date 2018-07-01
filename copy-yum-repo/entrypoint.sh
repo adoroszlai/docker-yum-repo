@@ -87,6 +87,7 @@ function usage {
   echo "  repo <repo_url> [<repo_url> ...]"
   echo "  repo-file <repo_host> <repo_url>"
   echo "  pkg <repo_url> <pkg_name> [<pkg_name> ...]"
+  echo "  file <url> [<url> ...]"
 }
 
 cmd=${1:-help}
@@ -111,6 +112,10 @@ case ${cmd} in
       exit 1
     fi
     generate-local-repo-file "$@"
+    ;;
+  file)
+    shift
+    get-urls "$@"
     ;;
   *)
     usage

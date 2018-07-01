@@ -15,14 +15,16 @@ REPO_HOST=repo
 ```
 # docker build -t copy-yum-repo copy-yum-repo
 docker run --rm -v ${REPO_DIR}:/var/repo copy-yum-repo \
-  repo http://public-repo-1.hortonworks.com/HDP/centos6/2.x/updates/2.5.0.0/hdp.repo
+  repo http://public-repo-1.hortonworks.com/HDP/centos6/2.x/updates/2.5.0.0/hdp.repo \
+    [more URLs]
 ```
 
 ### Download only some packages
 
 ```
 docker run --rm -v ${REPO_DIR}:/var/repo copy-yum-repo \
-  pkg http://public-repo-1.hortonworks.com/HDP/centos6/2.x/updates/2.5.0.0/hdp.repo "kafka*" "zookeeper*"
+  pkg http://public-repo-1.hortonworks.com/HDP/centos6/2.x/updates/2.5.0.0/hdp.repo \
+    "kafka*" "zookeeper*"
 ```
 
 ### Generate local repo file
@@ -38,7 +40,16 @@ As simple as defining `REPO_HOST` in docker environment.
 
 ```
 docker run --rm -v ${REPO_DIR}:/var/repo -e REPO_HOST copy-yum-repo \
-  repo http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/2.6.2.2/ambari.repo
+  repo http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/2.6.2.2/ambari.repo \
+    [more URLs]
+```
+
+### Download specific files
+
+```
+docker run --rm -v ${REPO_DIR}:/var/repo copy-yum-repo \
+  file http://public-repo-1.hortonworks.com/HDF/centos7/3.x/updates/3.1.0.0/tars/hdf_ambari_mp/hdf-ambari-mpack-3.1.0.0-564.tar.gz \
+    [more URLs]
 ```
 
 ### Copy APT mirror
@@ -47,7 +58,7 @@ docker run --rm -v ${REPO_DIR}:/var/repo -e REPO_HOST copy-yum-repo \
 # docker build -t apt-mirror apt-mirror
 docker run --rm -v ${REPO_DIR}:/var/spool/apt-mirror/mirror apt-mirror \
   http://public-repo-1.hortonworks.com/HDP/debian7/2.x/updates/2.6.3.0/hdp.list \
-  http://public-repo-1.hortonworks.com/ambari/debian7/2.x/updates/2.6.0.0/ambari.list
+    [more URLs]
 ```
 
 ### Run nginx to serve local repos
