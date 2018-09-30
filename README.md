@@ -52,13 +52,20 @@ docker run --rm -v ${REPO_DIR}:/var/repo copy-yum-repo \
     [more URLs]
 ```
 
-### Copy APT mirror
+### Copy APT repo
 
 ```
 # docker build -t apt-mirror apt-mirror
 docker run --rm -v ${REPO_DIR}:/var/spool/apt-mirror/mirror apt-mirror \
+  http://public-repo-1.hortonworks.com/HDP/debian7/2.x/updates/2.6.3.0/hdp.list
+```
+
+By default `apt-mirror` only copies one architecture (`amd64` for this Docker image).  To mirror more than one, pass the list of architectures, eg.:
+
+```
+docker run --rm -v ${REPO_DIR}:/var/spool/apt-mirror/mirror apt-mirror \
   http://public-repo-1.hortonworks.com/HDP/debian7/2.x/updates/2.6.3.0/hdp.list \
-    [more URLs]
+    amd64 i386
 ```
 
 ### Run nginx to serve local repos
