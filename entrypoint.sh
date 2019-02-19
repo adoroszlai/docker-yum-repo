@@ -3,14 +3,34 @@
 
 set -e -u
 
+: ${DEBUG:=0}
+: ${DRY_RUN:=false}
 : ${REPO_HOST:=}
+
+run-command() {
+  CMD="$@"
+  if [[ "$DRY_RUN" == "false" ]]; then
+    debug "$CMD"
+    "$@"
+  else
+    debug [DRY_RUN] "$CMD"
+  fi
+}
+
+debug() {
+  [[ ${DEBUG} -gt 0 ]] && echo "[DEBUG] $@" 1>&2
+}
 
 function get-repo-file {
   local repo_url="$1"
   cd /etc/yum.repos.d
   rm -f *.repo
   curl --remote-name --silent "${repo_url}"
-  echo $(pwd -P)/$(basename ${repo_url})
+  local repo_file=$(pwd -P)/$(basename "${repo_url}")
+  if [[ -n "${REPO_HOST}" ]]; then
+    repo_file=${repo_file/\/\/${REPO_HOST}\/}
+  fi
+  echo "${repo_file}"
 }
 
 function copy-packages {
@@ -22,7 +42,7 @@ function copy-packages {
   get-urls $(repotrack -n --urls "$@")
   create-repos $(grep 'baseurl=' ${repo_file} | cut -f3- -d'/')
   copy-gpg-keys "${repo_file}"
-  rm -f "${repo_file}"
+  run-command rm -f "${repo_file}"
   [[ -z ${REPO_HOST} ]] || generate-local-repo-file ${REPO_HOST} ${repo_url}
 }
 
@@ -32,11 +52,11 @@ function copy-repo {
     for line in $(perl -wnl -00 -e '($name, $path) = $_ =~ /\[(\S+)\].*baseurl=https?:\/\/(\S+)/s and print "$name]$path"' "${repo_file}"); do
       local repo="$(echo ${line} | cut -f1 -d']')"
       local path="$(echo ${line} | cut -f2 -d']')"
-      reposync -n -p /var/repo/${path} --norepopath -r "${repo}"
+      run-command reposync -n -p /var/repo/${path} --norepopath -r "${repo}"
       create-repos ${path}
     done
     copy-gpg-keys "${repo_file}"
-    rm -f "${repo_file}"
+    run-command rm -f "${repo_file}"
     [[ -z ${REPO_HOST} ]] || generate-local-repo-file ${REPO_HOST} ${repo_url}
   done
 }
@@ -50,7 +70,7 @@ function create-repos {
   for dir in "$@"; do
     [[ -d ${dir} ]] || continue
     echo "Creating repo in ${dir}"
-    createrepo -q --update /var/repo/${dir}
+    run-command createrepo -q --update /var/repo/${dir}
   done
 }
 
@@ -68,7 +88,7 @@ function get-urls {
       fi
     fi
     echo "Downloading ${url}"
-    curl --create-dirs --output ${path} --remote-time --silent ${url}
+    run-command curl --create-dirs --output ${path} --remote-time --silent ${url}
   done
 }
 
@@ -77,9 +97,10 @@ function generate-local-repo-file {
   [[ -n ${host} ]] || return 1
   local url=$2
   [[ -n ${url} ]] || return 2
-  local path=$(echo ${url} | cut -f3- -d'/')
-  mkdir -p $(dirname ${path})
-  curl --create-dirs --remote-time --silent ${url} | perl -wpl -e "s@https?://@\$&${host}/@g" > ${path}
+  local path=$(echo ${url} | sed -e "s@//${host}/@//@" | cut -f3- -d'/')
+  run-command mkdir -p "$(dirname ${path})"
+  run-command curl --create-dirs --output "${path}" --remote-time --silent "${url}"
+  run-command perl -wpl -i -e "s@https?://@\$&${host}/@g" ${path}
 }
 
 function usage {
@@ -89,6 +110,18 @@ function usage {
   echo "  pkg <repo_url> <pkg_name> [<pkg_name> ...]"
   echo "  file <url> [<url> ...]"
 }
+
+while getopts ":nv" opt; do
+  case "${opt}" in
+    n)
+      DRY_RUN=true
+      ;;
+    v)
+      DEBUG=1
+      ;;
+  esac
+done
+shift $((${OPTIND} - 1))
 
 cmd=${1:-help}
 
